@@ -1,0 +1,4 @@
+<launch>
+    <node name="data_process" pkg="honrobo_product" type="data_process"/>
+    <node name="CAN" pkg="honrobo_product" type="CAN.py"/>
+</launch> 

@@ -13,6 +13,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   my_msgs
 )
+catkin_package()
 
 add_executable(data_process src/data_process.cpp)
 add_executable(wireless src/wireless.cpp)
