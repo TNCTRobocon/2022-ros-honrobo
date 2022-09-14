@@ -33,24 +33,22 @@ int main(int argc, char** argv){
 
 	std_msgs::UInt8MultiArray msg;
 	msg.data.clear();
-	
+
 	SerialStream serial;
 	serial_set(serial);
 
 	ros::Rate rate(10);
 
 	while(ros::ok()){
-		vector<uint8_t> send_data(9);
+		vector<uint8_t> send_data(8);
 		if(!read(serial, send_data)) continue;
-		for(auto i = 0lu; i < send_data.size(); i++){
-			msg.data.push_back(send_data[i]);
-		}
+		msg.data.swap(send_data);
+
+		pub.publish(msg);
 		rate.sleep();
 	}
 
 }
-
-
 
 void serial_set(SerialStream& serial){
 	serial.Open("/dev/ttyUSB0");
@@ -82,10 +80,12 @@ bool read(SerialStream& serial, vector<uint8_t>& send_data){
 	return true;
 }
 
+constexpr char start_byte[] = "aa";//need to decide value
+
 bool check_start(SerialStream& serial){
 	char check_start = 0;
 
-	constexpr char start_byte[] = "aa";//need to decide value
+
 
 	while(serial.good()){
 		serial>>check_start;
@@ -101,8 +101,6 @@ bool check_start(SerialStream& serial){
 }
 
 bool check_sum(SerialStream& serial, char data[]){
-	constexpr char start_byte[] = "aa";//need to decide value
-
 	string str(data);
 	uint8_t sum = 0, recv = 0;
 	
