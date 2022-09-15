@@ -112,7 +112,7 @@ int main(int argc, char**argv){
 
 	while(ros::ok()){
 		input_status state;
-		bool is_update_value;
+		bool is_update_value = false;
 
 		if(is_new_value){
 			state.neatly             = can_msg.data[0] & 0b10000000;
@@ -147,12 +147,14 @@ int main(int argc, char**argv){
 		if(state.tire_return){
 			my_msgs::can_msg msg;
 			msg.id = 0x12;
+			msg.data.reserve(8);
 			can_tx.publish(msg);
 		}
 
 		if(state.robot_return){
 			my_msgs::can_msg msg;
 			msg.id = 0x13;
+			msg.data.reserve(8);
 			can_tx.publish(msg);
 		}
 
@@ -170,6 +172,8 @@ int main(int argc, char**argv){
 
 			msg_0x5n.id = 0x51;
 			msg_0x6n.id = 0x60;
+			msg_0x5n.data.reserve(8);
+			msg_0x6n.data.reserve(8);
 			can_tx.publish(msg_0x5n);
 			can_tx.publish(msg_0x6n);
 		}
@@ -179,7 +183,10 @@ int main(int argc, char**argv){
 
 			my_msgs::can_msg msg;
 			msg.id = 0x21;
+			msg.data.reserve(8);
 			msg.data; //have to decide protocol
+
+			can_tx.publish(msg);
 		}
 
 		if(is_update_value){
@@ -217,15 +224,6 @@ int main(int argc, char**argv){
 				break;
 			}
 
-			if(is_update_value){
-				uint8_t angle = state.shot_angle;
-				my_msgs::can_msg msg;
-				msg.id = 0x22;
-				msg.data[7] = angle;
-
-				can_tx.publish(msg);
-			}
-
 			uint8_t msg1_uint8[8], msg2_uint8[8];
 
 			convert_32_8(float_to_int(pub_x), &(msg1_uint8[0]));
@@ -234,6 +232,7 @@ int main(int argc, char**argv){
 
 			my_msgs::can_msg msg;
 			msg.id = 0x10;
+			msg.data.reserve(8);
 			for(auto i = 0lu; i < strlen((char*)msg1_uint8); i++){
 				msg.data[i] = msg1_uint8[i];
 			}
@@ -243,6 +242,16 @@ int main(int argc, char**argv){
 			for(auto i = 0lu; i < strlen((char*)msg2_uint8); i++){
 				msg.data[i] = msg2_uint8[i];
 			}
+			can_tx.publish(msg);
+		}
+
+		if(is_update_value){
+			uint8_t angle = state.shot_angle;
+			my_msgs::can_msg msg;
+			msg.data.reserve(8);
+			msg.id = 0x22;
+			msg.data[7] = angle;
+
 			can_tx.publish(msg);
 		}
 		//TODO
