@@ -70,25 +70,23 @@ uint32_t float_to_int(float f);
 void convert_32_8(uint32_t i, uint8_t*buf);
 
 //callback functions
+bool is_rx_can = false;
 my_msgs::can_msg can_msg;
 void can_rx_callback(const my_msgs::can_msg& CAN_RX){
-	can_msg.id = CAN_RX.id;
+	is_rx_can = true;
+	if(can_msg.data.size() != 8) can_msg.data.resize(8);
+	std::copy(CAN_RX.data.begin(), CAN_RX.data.end(), can_msg.data.begin());
 			
 #if TEST
 	ROS_INFO("receive data: %d, %d, %d, %d, %d, %d, %d, %d", can_msg.data[0], can_msg.data[1], can_msg.data[2], can_msg.data[3], can_msg.data[4], can_msg.data[5], can_msg.data[6], can_msg.data[7]);
 #endif // TEST
-
-#if PRODUCT
-
-#endif // PRODUCT
 }
 
 bool is_new_value = false;
 std_msgs::UInt8MultiArray rx_array;
 void controller_callback(const std_msgs::UInt8MultiArray &f){
-	for(auto i = 0lu; i < rx_array.data.size(); i++){
-		rx_array.data[i] = f.data[i];
-	}
+	if(rx_array.data.size() != 8) rx_array.data.resize(8);
+	std::copy(f.data.begin(), f.data.end(), rx_array.data.begin());
 	is_new_value = true;
 }
 
@@ -109,6 +107,8 @@ int main(int argc, char**argv){
 	cycle shot_spd;
 
 	ros::Rate rate(10);
+
+	bool reload_lock = false;
 
 	while(ros::ok()){
 		input_status state;
@@ -147,23 +147,27 @@ int main(int argc, char**argv){
 		if(state.tire_return){
 			my_msgs::can_msg msg;
 			msg.id = 0x12;
-			msg.data.reserve(8);
+			msg.data.resize(8);
 			can_tx.publish(msg);
 		}
 
 		if(state.robot_return){
 			my_msgs::can_msg msg;
 			msg.id = 0x13;
-			msg.data.reserve(8);
+			msg.data.resize(8);
 			can_tx.publish(msg);
 		}
 
-		if(state.shot_and_reload){
+		if(state.shot_and_reload && !reload_lock){
 			my_msgs::can_msg msg_0x2n;
 			my_msgs::can_msg msg_0x5n;
 
 			msg_0x2n.id = 0x20;
 			msg_0x5n.id = 0x50;
+			msg_0x2n.data.resize(8);
+			msg_0x5n.data.resize(8);
+			can_tx.publish(msg_0x2n);
+			can_tx.publish(msg_0x5n);
 		}
 
 		if(state.change_cartridge){
@@ -172,10 +176,12 @@ int main(int argc, char**argv){
 
 			msg_0x5n.id = 0x51;
 			msg_0x6n.id = 0x60;
-			msg_0x5n.data.reserve(8);
-			msg_0x6n.data.reserve(8);
+			msg_0x5n.data.resize(8);
+			msg_0x6n.data.resize(8);
 			can_tx.publish(msg_0x5n);
 			can_tx.publish(msg_0x6n);
+			
+			reload_lock = true;
 		}
 
 		if(state.shot_cycle_update){
@@ -183,7 +189,7 @@ int main(int argc, char**argv){
 
 			my_msgs::can_msg msg;
 			msg.id = 0x21;
-			msg.data.reserve(8);
+			msg.data.resize(8);
 			msg.data; //have to decide protocol
 
 			can_tx.publish(msg);
@@ -232,7 +238,7 @@ int main(int argc, char**argv){
 
 			my_msgs::can_msg msg;
 			msg.id = 0x10;
-			msg.data.reserve(8);
+			msg.data.resize(8);
 			for(auto i = 0lu; i < strlen((char*)msg1_uint8); i++){
 				msg.data[i] = msg1_uint8[i];
 			}
@@ -248,7 +254,7 @@ int main(int argc, char**argv){
 		if(is_update_value){
 			uint8_t angle = state.shot_angle;
 			my_msgs::can_msg msg;
-			msg.data.reserve(8);
+			msg.data.resize(8);
 			msg.id = 0x22;
 			msg.data[7] = angle;
 
@@ -259,12 +265,24 @@ int main(int argc, char**argv){
 		if(is_emergency){
 			my_msgs::can_msg msg;
 			msg.id = 0x0f;
+			msg.data.resize(8);
 
 			for(auto i = 1; i < 7; i++){
 				msg.id += 0x10;
 				can_tx.publish(msg);
 			}
 		}
+
+		if(is_rx_can){
+			if((can_msg.id >= 0x08 && 0x0D <= can_msg.id) || can_msg.id == 0x0F) is_emergency = true;
+			if(can_msg.id == 0x0E) is_emergency = false;
+
+			if(can_msg.id == 0x07) reload_lock = false;
+
+			// TODO
+			// write odom
+		}
+		
 #if TEST
 
 #endif //TEST
