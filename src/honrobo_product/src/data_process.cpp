@@ -24,6 +24,7 @@
 #define PRODUCT 1
 #endif // PRODUCT
 
+constexpr size_t can_data_size = 8;
 bool is_emergency = false;
 
 // structures
@@ -37,10 +38,11 @@ struct input_status{
 		 return_to_start    = false,
 		 shot_cycle_update  = false;
 
-	uint8_t spin = 0,
-			shot_angle = 0,
-			x_velo = 0,
-			y_velo = 0;
+	int8_t spin = 0,
+		   x_velo = 0,
+		   y_velo = 0;
+
+	uint8_t shot_angle = 0;
 };
 
 class cycle{
@@ -48,9 +50,10 @@ class cycle{
 
 public:
 	enum MODE{
-		HI_SENSE,
+		STOP,
+		LOW_SENSE,
 		MIDDLE_SENSE,
-		LOW_SENSE
+		HI_SENSE,
 	};
 
 	cycle(){}
@@ -58,7 +61,7 @@ public:
 
 	void operator++(){
 		cycle_val++;
-		cycle_val = (cycle_val == 3)? 0: cycle_val;
+		cycle_val = (cycle_val == 4)? 0: cycle_val;
 	}
 
 	uint8_t get_cycle_state(){ return cycle_val; }
@@ -74,7 +77,7 @@ bool is_rx_can = false;
 my_msgs::can_msg can_msg;
 void can_rx_callback(const my_msgs::can_msg& CAN_RX){
 	is_rx_can = true;
-	if(can_msg.data.size() != 8) can_msg.data.resize(8);
+	if(can_msg.data.size() != can_data_size) can_msg.data.resize(can_data_size);
 	std::copy(CAN_RX.data.begin(), CAN_RX.data.end(), can_msg.data.begin());
 			
 #if TEST
@@ -84,9 +87,15 @@ void can_rx_callback(const my_msgs::can_msg& CAN_RX){
 
 bool is_new_value = false;
 std_msgs::UInt8MultiArray rx_array;
-void controller_callback(const std_msgs::UInt8MultiArray &f){
-	if(rx_array.data.size() != 8) rx_array.data.resize(8);
-	std::copy(f.data.begin(), f.data.end(), rx_array.data.begin());
+void controller_wireless_callback(const std_msgs::UInt8MultiArray &rx_msg){
+	if(rx_array.data.size() != can_data_size) rx_array.data.resize(can_data_size);
+	std::copy(rx_msg.data.begin(), rx_msg.data.end(), rx_array.data.begin());
+	is_new_value = true;
+}
+
+void controller_wifi_callback(const std_msgs::UInt8MultiArray& rx_msg){
+	if(rx_array.data.size() != can_data_size) rx_array.data.resize(can_data_size);
+	std::copy(rx_msg.data.begin(), rx_msg.data.end(), rx_array.data.begin());
 	is_new_value = true;
 }
 
@@ -99,14 +108,13 @@ int main(int argc, char**argv){
 	ros::NodeHandle nh;
 	ros::Publisher can_tx = nh.advertise<my_msgs::can_msg>("CAN_TX", 10);
 	ros::Subscriber can_rx = nh.subscribe("CAN_RX", 10, can_rx_callback);
-	ros::Publisher controller_output = nh.advertise<std_msgs::Float32MultiArray>("lidar data", 10);
-	ros::Subscriber controller_input = nh.subscribe("control_data", 10, controller_callback);
+	ros::Publisher controller_output = nh.advertise<std_msgs::Float32MultiArray>("lidar_data", 10);
+	ros::Subscriber controller_wireless_input = nh.subscribe("control_wireless_data", 10, controller_wireless_callback);
+	ros::Subscriber controller_wifi_input = 	nh.subscribe("control_data", 10, controller_wifi_callback);
 	// need more?
 
 	cycle sense;
 	cycle shot_spd;
-
-	ros::Rate rate(10);
 
 	bool reload_lock = false;
 
@@ -115,21 +123,21 @@ int main(int argc, char**argv){
 		bool is_update_value = false;
 
 		if(is_new_value){
-			state.neatly             = can_msg.data[0] & 0b10000000;
-			state.sense_cycle_update = can_msg.data[0] & 0b01000000;
-			state.tire_return        = can_msg.data[0] & 0b00100000;
-			state.robot_return       = can_msg.data[0] & 0b00010000;
-			state.shot_and_reload    = can_msg.data[0] & 0b00001000;
-			state.change_cartridge   = can_msg.data[0] & 0b00000100;
+			state.neatly             = rx_array.data[0] & 0b10000000;
+			state.sense_cycle_update = rx_array.data[0] & 0b01000000;
+			state.tire_return        = rx_array.data[0] & 0b00100000;
+			state.robot_return       = rx_array.data[0] & 0b00010000;
+			state.shot_and_reload    = rx_array.data[0] & 0b00001000;
+			state.change_cartridge   = rx_array.data[0] & 0b00000100;
 			
-			state.return_to_start    = can_msg.data[1] & 0x00000100;
+			state.return_to_start    = rx_array.data[1] & 0x00000100;
 
-			state.shot_cycle_update  = can_msg.data[6]>50? true: false;
+			state.shot_cycle_update  = (rx_array.data[6]>50)? true: false;
 
-			state.spin       = can_msg.data[2];
-			state.shot_angle = can_msg.data[3];
-			state.x_velo     = can_msg.data[4];
-			state.y_velo     = can_msg.data[5];
+			state.spin       = rx_array.data[2] - 128;
+			state.shot_angle = rx_array.data[3];
+			state.x_velo     = rx_array.data[4] - 128;
+			state.y_velo     = rx_array.data[5] - 128;
 			
 
 			is_new_value = false;
@@ -147,14 +155,14 @@ int main(int argc, char**argv){
 		if(state.tire_return){
 			my_msgs::can_msg msg;
 			msg.id = 0x12;
-			msg.data.resize(8);
+			msg.data.resize(can_data_size);
 			can_tx.publish(msg);
 		}
 
 		if(state.robot_return){
 			my_msgs::can_msg msg;
 			msg.id = 0x13;
-			msg.data.resize(8);
+			msg.data.resize(can_data_size);
 			can_tx.publish(msg);
 		}
 
@@ -164,8 +172,8 @@ int main(int argc, char**argv){
 
 			msg_0x2n.id = 0x20;
 			msg_0x5n.id = 0x50;
-			msg_0x2n.data.resize(8);
-			msg_0x5n.data.resize(8);
+			msg_0x2n.data.resize(can_data_size);
+			msg_0x5n.data.resize(can_data_size);
 			can_tx.publish(msg_0x2n);
 			can_tx.publish(msg_0x5n);
 		}
@@ -176,8 +184,8 @@ int main(int argc, char**argv){
 
 			msg_0x5n.id = 0x51;
 			msg_0x6n.id = 0x60;
-			msg_0x5n.data.resize(8);
-			msg_0x6n.data.resize(8);
+			msg_0x5n.data.resize(can_data_size);
+			msg_0x6n.data.resize(can_data_size);
 			can_tx.publish(msg_0x5n);
 			can_tx.publish(msg_0x6n);
 			
@@ -189,7 +197,7 @@ int main(int argc, char**argv){
 
 			my_msgs::can_msg msg;
 			msg.id = 0x21;
-			msg.data.resize(8);
+			msg.data.resize(can_data_size);
 			msg.data; //have to decide protocol
 
 			can_tx.publish(msg);
@@ -198,20 +206,26 @@ int main(int argc, char**argv){
 		if(is_update_value){
 			///@brief sense coeff 
 			///       have to change to controller's opinion
-			constexpr float hi_sense_coeff     = 3/128,
-							middle_sense_coeff = 1/128,
-							low_sense_coeff    = 0.5/128;
-			constexpr float spin_hi_sense_coeff     = 2*M_PI/128,
-							spin_middle_sense_coeff = 0.5*M_PI/128,
-							spin_low_sense_coeff    = 0.25*M_PI/128;
+			constexpr float hi_sense_coeff     = 3.0f/128.0f,
+							middle_sense_coeff = 1.0f/128.0f,
+							low_sense_coeff    = 0.5/128.0f;
+			constexpr float spin_hi_sense_coeff     = 2.0f*M_PI/128.0f,
+							spin_middle_sense_coeff = 0.5*M_PI/128.0f,
+							spin_low_sense_coeff    = 0.25*M_PI/128.0f;
 
 			float pub_x = 0, pub_y = 0, pub_spin = 0;
 
 			switch (sense.get_cycle_state()){
-			case sense.HI_SENSE:
-				pub_x = state.x_velo * hi_sense_coeff;
-				pub_y = state.y_velo * hi_sense_coeff;
-				pub_spin = state.spin * spin_hi_sense_coeff;
+			case sense.STOP:
+				pub_x = 0;
+				pub_y = 0;
+				pub_spin = 0;
+				break;
+							
+			case sense.LOW_SENSE:
+				pub_x = state.x_velo * low_sense_coeff;
+				pub_y = state.y_velo * low_sense_coeff;
+				pub_spin = state.spin * spin_low_sense_coeff;
 				break;
 
 			case sense.MIDDLE_SENSE:
@@ -220,32 +234,33 @@ int main(int argc, char**argv){
 				pub_spin = state.spin * spin_middle_sense_coeff;
 				break;
 
-			case sense.LOW_SENSE:
-				pub_x = state.x_velo * low_sense_coeff;
-				pub_y = state.y_velo * low_sense_coeff;
-				pub_spin = state.spin * spin_low_sense_coeff;
+			case sense.HI_SENSE:
+				pub_x = state.x_velo * hi_sense_coeff;
+				pub_y = state.y_velo * hi_sense_coeff;
+				pub_spin = state.spin * spin_hi_sense_coeff;
 				break;
 			
 			default:
 				break;
 			}
 
-			uint8_t msg1_uint8[8], msg2_uint8[8];
+			uint8_t msg1_uint8[can_data_size], msg2_uint8[can_data_size];
 
 			convert_32_8(float_to_int(pub_x), &(msg1_uint8[0]));
 			convert_32_8(float_to_int(pub_y), &(msg1_uint8[4]));
 			convert_32_8(float_to_int(pub_spin), &(msg2_uint8[0]));
+			convert_32_8(0, &(msg2_uint8[4]));
 
 			my_msgs::can_msg msg;
 			msg.id = 0x10;
-			msg.data.resize(8);
-			for(auto i = 0lu; i < strlen((char*)msg1_uint8); i++){
+			msg.data.resize(can_data_size);
+			for(auto i = 0lu; i < 8; i++){
 				msg.data[i] = msg1_uint8[i];
 			}
 			can_tx.publish(msg);
 
 			msg.id = 0x11;
-			for(auto i = 0lu; i < strlen((char*)msg2_uint8); i++){
+			for(auto i = 0lu; i < 8; i++){
 				msg.data[i] = msg2_uint8[i];
 			}
 			can_tx.publish(msg);
@@ -254,7 +269,7 @@ int main(int argc, char**argv){
 		if(is_update_value){
 			uint8_t angle = state.shot_angle;
 			my_msgs::can_msg msg;
-			msg.data.resize(8);
+			msg.data.resize(can_data_size);
 			msg.id = 0x22;
 			msg.data[7] = angle;
 
@@ -265,7 +280,7 @@ int main(int argc, char**argv){
 		if(is_emergency){
 			my_msgs::can_msg msg;
 			msg.id = 0x0f;
-			msg.data.resize(8);
+			msg.data.resize(can_data_size);
 
 			for(auto i = 1; i < 7; i++){
 				msg.id += 0x10;
@@ -274,21 +289,19 @@ int main(int argc, char**argv){
 		}
 
 		if(is_rx_can){
-			if((can_msg.id >= 0x08 && 0x0D <= can_msg.id) || can_msg.id == 0x0F) is_emergency = true;
+			if((can_msg.id >= 0x08 && can_msg.id <= 0x0D) || can_msg.id == 0x0F) is_emergency = true;
 			if(can_msg.id == 0x0E) is_emergency = false;
 
 			if(can_msg.id == 0x07) reload_lock = false;
 
 			// TODO
-			// write odom
+			// write odom?
 		}
 		
 #if TEST
 
 #endif //TEST
-
 		ros::spinOnce();
-		rate.sleep();
 	}
 }
 

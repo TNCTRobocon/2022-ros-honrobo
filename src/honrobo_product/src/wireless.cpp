@@ -37,7 +37,7 @@ int main(int argc, char** argv){
 	SerialStream serial;
 	serial_set(serial);
 
-	ros::Rate rate(10);
+	ros::Rate rate(100);
 
 	while(ros::ok()){
 		vector<uint8_t> send_data(8);
