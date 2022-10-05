@@ -13,6 +13,7 @@ except OSError:
 	rospy.loginfo('error OS')
 	exit()
 
+
 def callback(msg):
 	rospy.loginfo(msg)
 	can_tx_message = can.Message(arbitration_id=msg.id, data=msg.data, extended_id=False)
@@ -29,8 +30,8 @@ def main():
 	rate = rospy.Rate(500) #control rate is 500Hz
 
 	while not rospy.is_shutdown():
-		CAN_msg = can0.recv(0.01)
-		if CAN_msg is not None and 0x00 <= CAN_msg.id <= 0x0f:
+		CAN_msg = can0.recv(0.005)
+		if CAN_msg is not None and 0x00 <= CAN_msg.arbitration_id <= 0x0f:
 			msg = can_msg()
 			msg.data = CAN_msg.data.copy()
 			msg.id = CAN_msg.arbitration_id

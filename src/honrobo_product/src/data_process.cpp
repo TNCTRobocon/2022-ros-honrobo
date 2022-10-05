@@ -27,6 +27,10 @@
 constexpr size_t can_data_size = 8;
 bool is_emergency = false;
 
+// prototype decl
+template<typename T>
+T clamp(const T val, const T max, const T min);
+
 // structures
 struct input_status{
 	bool neatly = false,
@@ -130,15 +134,19 @@ int main(int argc, char**argv){
 			state.shot_and_reload    = rx_array.data[0] & 0b00001000;
 			state.change_cartridge   = rx_array.data[0] & 0b00000100;
 			
-			state.return_to_start    = rx_array.data[1] & 0x00000100;
+			state.return_to_start    = rx_array.data[1] & 0b00000100;
 
 			state.shot_cycle_update  = (rx_array.data[6]>50)? true: false;
 
-			state.spin       = rx_array.data[2] - 128;
+			int16_t tmp_spin       = (rx_array.data[2] - 128 + 4) & 0xfff8;
 			state.shot_angle = rx_array.data[3];
-			state.x_velo     = rx_array.data[4] - 128;
-			state.y_velo     = rx_array.data[5] - 128;
-			
+			int16_t tmp_x_velo     = (rx_array.data[4] - 128 + 4) & 0xfff8;
+			int16_t tmp_y_velo     = (rx_array.data[5] - 128 + 4) & 0xfff8;
+
+			constexpr int16_t max = 127, min = -128;
+			state.spin = clamp<int16_t>(tmp_spin, max, min);
+			state.x_velo = (int8_t)clamp<int16_t>(tmp_x_velo, max, min);
+			state.y_velo = clamp(tmp_y_velo, max, min);
 
 			is_new_value = false;
 			is_update_value = true;
@@ -308,6 +316,13 @@ int main(int argc, char**argv){
 #if TEST
 
 #endif //TEST
+
+template<typename T>
+T clamp(const T val, const T max, const T min){
+	if(val > max) return max;
+	if(val < min) return min;
+	return val;
+}
 
 //helper functions
 uint32_t float_to_int(float f){

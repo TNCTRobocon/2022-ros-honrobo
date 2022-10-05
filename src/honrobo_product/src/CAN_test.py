@@ -4,7 +4,7 @@ import rospy
 from my_msgs.msg import can_msg
 
 def callback(msg):
-    if msg.id == 0x10:
+    if msg.id == 0x22 or msg.id == 0x10:
 	    rospy.loginfo(msg)
 	
 def param_init():
