@@ -26,14 +26,11 @@
 
 constexpr size_t can_data_size = 8;
 bool is_emergency = false;
-
-// prototype decl
-template<typename T>
-T clamp(const T val, const T max, const T min);
+bool is_restoration = false;
 
 // structures
 struct input_status{
-	bool neatly = false,
+	bool drive_mode_update  = false,
 		 sense_cycle_update = false,
 		 tire_return        = false,
 		 robot_return       = false,
@@ -47,6 +44,12 @@ struct input_status{
 		   y_velo = 0;
 
 	uint8_t shot_angle = 0;
+
+	enum {
+		MOVE,
+		SPIN,
+		SHOT
+	};
 };
 
 class cycle{
@@ -73,6 +76,10 @@ public:
 };
 
 //prototype decl
+template<typename T>
+T clamp(const T val, const T max, const T min);
+template<typename T>
+T clamp(const T val, const T diff_val, const T max, const T min);
 uint32_t float_to_int(float f);
 void convert_32_8(uint32_t i, uint8_t*buf);
 
@@ -83,10 +90,6 @@ void can_rx_callback(const my_msgs::can_msg& CAN_RX){
 	is_rx_can = true;
 	if(can_msg.data.size() != can_data_size) can_msg.data.resize(can_data_size);
 	std::copy(CAN_RX.data.begin(), CAN_RX.data.end(), can_msg.data.begin());
-			
-#if TEST
-	ROS_INFO("receive data: %d, %d, %d, %d, %d, %d, %d, %d", can_msg.data[0], can_msg.data[1], can_msg.data[2], can_msg.data[3], can_msg.data[4], can_msg.data[5], can_msg.data[6], can_msg.data[7]);
-#endif // TEST
 }
 
 bool is_new_value = false;
@@ -119,7 +122,8 @@ int main(int argc, char**argv){
 
 	cycle sense;
 	cycle shot_spd;
-
+	uint8_t shot_status = 0;
+	bool pre_LT = false;
 	bool reload_lock = false;
 
 	while(ros::ok()){
@@ -127,7 +131,7 @@ int main(int argc, char**argv){
 		bool is_update_value = false;
 
 		if(is_new_value){
-			state.neatly             = rx_array.data[0] & 0b10000000;
+			state.drive_mode_update  = rx_array.data[0] & 0b10000000;
 			state.sense_cycle_update = rx_array.data[0] & 0b01000000;
 			state.tire_return        = rx_array.data[0] & 0b00100000;
 			state.robot_return       = rx_array.data[0] & 0b00010000;
@@ -135,16 +139,19 @@ int main(int argc, char**argv){
 			state.change_cartridge   = rx_array.data[0] & 0b00000100;
 			
 			state.return_to_start    = rx_array.data[1] & 0b00000100;
+			bool now_LT = (rx_array.data[6]>50)? true: false;
+			state.shot_cycle_update  = (pre_LT^now_LT) & now_LT;
+			pre_LT = now_LT;
 
-			state.shot_cycle_update  = (rx_array.data[6]>50)? true: false;
 
-			int16_t tmp_spin       = (rx_array.data[2] - 128 + 4) & 0xfff8;
-			state.shot_angle = rx_array.data[3];
-			int16_t tmp_x_velo     = (rx_array.data[4] - 128 + 4) & 0xfff8;
+			int16_t tmp_spin       = -(rx_array.data[2] - 128 -4) & 0xfff8;
+			int16_t tmp_shot_angle = (rx_array.data[3] - 128 + 4) & 0xfff8;
+			int16_t tmp_x_velo     = -(rx_array.data[4] - 128 -4) & 0xfff8;
 			int16_t tmp_y_velo     = (rx_array.data[5] - 128 + 4) & 0xfff8;
 
 			constexpr int16_t max = 127, min = -128;
 			state.spin = clamp<int16_t>(tmp_spin, max, min);
+			state.shot_angle = clamp(tmp_shot_angle, max, min);
 			state.x_velo = (int8_t)clamp<int16_t>(tmp_x_velo, max, min);
 			state.y_velo = clamp(tmp_y_velo, max, min);
 
@@ -152,8 +159,20 @@ int main(int argc, char**argv){
 			is_update_value = true;
 		}
 
-		if(state.neatly){
-			//TODO
+		if(state.drive_mode_update){
+			shot_status++;
+			if(shot_status%3 == 0) shot_status = 0;
+			my_msgs::can_msg msg;
+			msg.id = 0x14;
+			msg.data.resize(8);
+			msg.data[0] = shot_status;
+			can_tx.publish(msg);
+
+			msg.id = 0x23;
+			
+			can_tx.publish(msg);
+
+			ROS_INFO("%d",msg.data[0]);
 		}
 
 		if(state.sense_cycle_update){
@@ -174,7 +193,7 @@ int main(int argc, char**argv){
 			can_tx.publish(msg);
 		}
 
-		if(state.shot_and_reload && !reload_lock){
+		if(state.shot_and_reload && state.SHOT){
 			my_msgs::can_msg msg_0x2n;
 			my_msgs::can_msg msg_0x5n;
 
@@ -211,10 +230,13 @@ int main(int argc, char**argv){
 			can_tx.publish(msg);
 		}
 
-		if(is_update_value){
+		if(is_update_value && shot_status == state.MOVE){
 			///@brief sense coeff 
 			///       have to change to controller's opinion
-			constexpr float hi_sense_coeff     = 3.0f/128.0f,
+			enum{
+				X, Y, SPIN
+			};
+			constexpr float hi_sense_coeff     = 2.0f/128.0f,
 							middle_sense_coeff = 1.0f/128.0f,
 							low_sense_coeff    = 0.5/128.0f;
 			constexpr float spin_hi_sense_coeff     = 2.0f*M_PI/128.0f,
@@ -222,6 +244,7 @@ int main(int argc, char**argv){
 							spin_low_sense_coeff    = 0.25*M_PI/128.0f;
 
 			float pub_x = 0, pub_y = 0, pub_spin = 0;
+			static std::array<float, 3> pre_v = {0, 0, 0};
 
 			switch (sense.get_cycle_state()){
 			case sense.STOP:
@@ -252,6 +275,10 @@ int main(int argc, char**argv){
 				break;
 			}
 
+			pub_x = clamp(pub_x, pre_v[X], 0.05f, -0.05f);
+			pub_y = clamp(pub_y, pre_v[Y], 0.05f, -0.05f);
+			pub_spin = clamp(pub_spin, pre_v[SPIN], 0.05f, -0.05f);
+
 			uint8_t msg1_uint8[can_data_size], msg2_uint8[can_data_size];
 
 			convert_32_8(float_to_int(pub_x), &(msg1_uint8[0]));
@@ -274,16 +301,73 @@ int main(int argc, char**argv){
 			can_tx.publish(msg);
 		}
 
+		if(is_update_value && shot_status == state.SPIN){
+			///@brief sense coeff 
+			///       have to change by controller's opinion
+			constexpr float hi_sense_coeff     = 2.0f/128.0f,
+							middle_sense_coeff = 1.0f/128.0f,
+							low_sense_coeff    = 0.5/128.0f;
+			constexpr float spin_hi_sense_coeff     = 2.0f*M_PI/128.0f,
+							spin_middle_sense_coeff = 0.5*M_PI/128.0f,
+							spin_low_sense_coeff    = 0.25*M_PI/128.0f;
+
+			float pub_x = 0, pub_y = 0, pub_spin = 0;
+
+			switch (sense.get_cycle_state()){
+			case sense.STOP:
+				pub_x = 0;
+				break;
+							
+			case sense.LOW_SENSE:
+				pub_x = state.x_velo * low_sense_coeff;
+				break;
+
+			case sense.MIDDLE_SENSE:
+				pub_x = state.x_velo * middle_sense_coeff;
+				break;
+
+			case sense.HI_SENSE:
+				pub_x = state.x_velo * hi_sense_coeff;
+				break;
+			
+			default:
+				break;
+			}
+
+			uint8_t msg1_uint8[can_data_size];
+
+			convert_32_8(float_to_int(pub_x), &(msg1_uint8[0]));
+			convert_32_8(0.0f, &(msg1_uint8[4]));
+			
+			my_msgs::can_msg msg;
+			msg.id = 0x15;
+			msg.data.resize(can_data_size);
+			for(auto i = 0lu; i < 8; i++){
+				msg.data[i] = msg1_uint8[i];
+			}
+			can_tx.publish(msg);
+		}
+
 		if(is_update_value){
-			uint8_t angle = state.shot_angle;
 			my_msgs::can_msg msg;
 			msg.data.resize(can_data_size);
 			msg.id = 0x22;
-			msg.data[7] = angle;
+			msg.data[7] = state.shot_angle;
 
 			can_tx.publish(msg);
 		}
 		//TODO
+
+		if(is_restoration){
+			my_msgs::can_msg msg;
+			msg.id = 0x0E;
+			msg.data.resize(can_data_size);
+
+			for(auto i = 1; i < 7; i++){
+				msg.id += 0x10;
+				can_tx.publish(msg);
+			}
+		}
 
 		if(is_emergency){
 			my_msgs::can_msg msg;
@@ -294,11 +378,14 @@ int main(int argc, char**argv){
 				msg.id += 0x10;
 				can_tx.publish(msg);
 			}
+			shot_status = 0;
+			while(sense.get_cycle_state() == sense.STOP) ++sense;
+			while(shot_spd.get_cycle_state() == shot_spd.STOP) ++shot_spd;
 		}
 
 		if(is_rx_can){
-			if((can_msg.id >= 0x08 && can_msg.id <= 0x0D) || can_msg.id == 0x0F) is_emergency = true;
-			if(can_msg.id == 0x0E) is_emergency = false;
+			if(can_msg.id == 0x0F) is_emergency = true;
+			if(can_msg.id == 0x0E) is_restoration = true;
 
 			if(can_msg.id == 0x07) reload_lock = false;
 
@@ -321,6 +408,13 @@ template<typename T>
 T clamp(const T val, const T max, const T min){
 	if(val > max) return max;
 	if(val < min) return min;
+	return val;
+}
+
+template<typename T>
+T clamp(const T val, const T diff_val, const T max, const T min){
+	if((val-diff_val) > max) return diff_val+max;
+	if((val-diff_val) < min) return diff_val+min;
 	return val;
 }
 

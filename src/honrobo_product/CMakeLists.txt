@@ -11,18 +11,20 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
   std_msgs
+  sensor_msgs
   my_msgs
 )
 catkin_package()
 
 add_executable(data_process src/data_process.cpp)
 add_executable(wireless src/wireless.cpp)
+add_executable(joy_encode src/joy_node.cpp)
 
 target_link_libraries(wireless serial)
 
-
 target_compile_options(data_process PUBLIC -Wall -O2)
 target_link_options(wireless PUBLIC -Wall -O2)
+target_link_options(joy_encode PUBLIC -Wall -O2)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -157,7 +159,7 @@ include_directories(
 # add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 add_dependencies(data_process ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 add_dependencies(wireless ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-
+add_dependencies(joy_encode ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 ## Specify libraries to link a library or executable target against
 # target_link_libraries(${PROJECT_NAME}_node
 #   ${catkin_LIBRARIES}
@@ -167,6 +169,7 @@ target_link_libraries(
   data_process ${catkin_LIBRARIES}
 )
 target_link_libraries(wireless ${catkin_LIBRARIES})
+target_link_libraries(joy_encode ${catkin_LIBRARIES})
 
 #############
 ## Install ##
