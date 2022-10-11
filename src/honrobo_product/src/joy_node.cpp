@@ -15,6 +15,7 @@ void callback(const sensor_msgs::Joy& joy_){
 int main(int argc, char**argv){
     joy.buttons.resize(8);
     joy.axes.resize(8);
+    
     ros::init(argc, argv, "joy_encode");
     ros::NodeHandle nh;
     ros::Subscriber sub = nh.subscribe("joy", 10, callback);
@@ -27,13 +28,16 @@ int main(int argc, char**argv){
         if(is_rx){
             msg.data[0] = 
                 (joy.buttons[0] << 7) +
-                (joy.buttons[1] << 6 )+
+                (joy.buttons[1] << 6) +
                 (joy.buttons[2] << 5) +
                 (joy.buttons[3] << 4) +
                 (joy.buttons[5] << 3) +
                 (joy.buttons[4] << 2);
                 ROS_INFO("%d, %d", msg.data[0], msg.data[2]);
                 is_rx = false;
+
+            msg.data[1] = 
+                0;//TODO
         }
         
         msg.data[2] = joy.axes[3]*127 - 128;

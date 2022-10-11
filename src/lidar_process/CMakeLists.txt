@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(honrobo_product)
+project(lidar_process)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
@@ -10,22 +10,19 @@ project(honrobo_product)
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
-  std_msgs
   sensor_msgs
-  my_msgs
+  std_msgs
 )
 
 catkin_package()
 
-add_executable(data_process src/data_process.cpp)
-add_executable(wireless src/wireless.cpp)
-add_executable(joy_encode src/joy_node.cpp)
+add_executable(lidar_process src/lidar_process.cpp)
 
-target_link_libraries(wireless serial)
+target_compile_options(lidar_process PUBLIC -Wall -O2)
 
-target_compile_options(data_process PUBLIC -Wall -O2)
-target_compile_options(wireless PUBLIC -Wall -O2)
-target_compile_options(joy_encode PUBLIC -Wall -O2)
+add_dependencies(lidar_process ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+target_link_libraries(lidar_process ${catkin_LIBRARIES})
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -84,7 +81,7 @@ target_compile_options(joy_encode PUBLIC -Wall -O2)
 ## Generate added messages and services with any dependencies listed here
 # generate_messages(
 #   DEPENDENCIES
-#   std_msgs
+#   sensor_msgs#   std_msgs
 # )
 
 ################################################
@@ -118,8 +115,8 @@ target_compile_options(joy_encode PUBLIC -Wall -O2)
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
 #  INCLUDE_DIRS include
-#  LIBRARIES honrobo_product
-#  CATKIN_DEPENDS roscpp rospy std_msgs
+#  LIBRARIES lidar_process
+#  CATKIN_DEPENDS roscpp rospy sensor_msgs std_msgs
 #  DEPENDS system_lib
 )
 
@@ -136,7 +133,7 @@ include_directories(
 
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
-#   src/${PROJECT_NAME}/honrobo_product.cpp
+#   src/${PROJECT_NAME}/lidar_process.cpp
 # )
 
 ## Add cmake target dependencies of the library
@@ -147,7 +144,7 @@ include_directories(
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-# add_executable(${PROJECT_NAME}_node src/honrobo_product_node.cpp)
+# add_executable(${PROJECT_NAME}_node src/lidar_process_node.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -158,19 +155,11 @@ include_directories(
 ## Add cmake target dependencies of the executable
 ## same as for the library above
 # add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-add_dependencies(data_process ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-add_dependencies(wireless ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-add_dependencies(joy_encode ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
 ## Specify libraries to link a library or executable target against
 # target_link_libraries(${PROJECT_NAME}_node
 #   ${catkin_LIBRARIES}
 # )
-
-target_link_libraries(
-  data_process ${catkin_LIBRARIES}
-)
-target_link_libraries(wireless ${catkin_LIBRARIES})
-target_link_libraries(joy_encode ${catkin_LIBRARIES})
 
 #############
 ## Install ##
@@ -219,7 +208,7 @@ target_link_libraries(joy_encode ${catkin_LIBRARIES})
 #############
 
 ## Add gtest based cpp test target and link libraries
-# catkin_add_gtest(${PROJECT_NAME}-test test/test_honrobo_product.cpp)
+# catkin_add_gtest(${PROJECT_NAME}-test test/test_lidar_process.cpp)
 # if(TARGET ${PROJECT_NAME}-test)
 #   target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
 # endif()

@@ -11,7 +11,7 @@
  */
 #include <ros/ros.h>
 #include <std_msgs/UInt8MultiArray.h>
-#include <std_msgs/Float32MultiArray.h>
+#include <std_msgs/Float32.h>
 #include <my_msgs/can_msg.h>
 
 #define TEST // need to remove
@@ -37,6 +37,7 @@ struct input_status{
 		 shot_and_reload    = false,
 		 change_cartridge   = false,
 		 return_to_start    = false,
+		 rise_initialize    = false,
 		 shot_cycle_update  = false;
 
 	int8_t spin = 0,
@@ -106,6 +107,13 @@ void controller_wifi_callback(const std_msgs::UInt8MultiArray& rx_msg){
 	is_new_value = true;
 }
 
+bool lidar_rx = false;
+float lidar = 0.0f;
+void lidar_callback(const std_msgs::Float32& lidar_angle){
+	lidar = lidar_angle.data;
+	lidar_rx = true;
+}
+
 #if TEST
 
 #endif //TEST
@@ -115,7 +123,8 @@ int main(int argc, char**argv){
 	ros::NodeHandle nh;
 	ros::Publisher can_tx = nh.advertise<my_msgs::can_msg>("CAN_TX", 10);
 	ros::Subscriber can_rx = nh.subscribe("CAN_RX", 10, can_rx_callback);
-	ros::Publisher controller_output = nh.advertise<std_msgs::Float32MultiArray>("lidar_data", 10);
+	ros::Subscriber lidar_input = nh.subscribe("lidar_val", 10, lidar_callback);
+	ros::Publisher controller_output = nh.advertise<std_msgs::Float32>("lidar_data", 10);
 	ros::Subscriber controller_wireless_input = nh.subscribe("control_wireless_data", 10, controller_wireless_callback);
 	ros::Subscriber controller_wifi_input = 	nh.subscribe("control_data", 10, controller_wifi_callback);
 	// need more?
@@ -130,6 +139,13 @@ int main(int argc, char**argv){
 		input_status state;
 		bool is_update_value = false;
 
+		if(lidar_rx){
+			std_msgs::Float32 msg;
+			msg.data = lidar;
+			controller_output.publish(msg);
+			lidar_rx = false;
+		}
+
 		if(is_new_value){
 			state.drive_mode_update  = rx_array.data[0] & 0b10000000;
 			state.sense_cycle_update = rx_array.data[0] & 0b01000000;
@@ -138,6 +154,7 @@ int main(int argc, char**argv){
 			state.shot_and_reload    = rx_array.data[0] & 0b00001000;
 			state.change_cartridge   = rx_array.data[0] & 0b00000100;
 			
+			state.rise_initialize    = rx_array.data[1] & 0b10000000;
 			state.return_to_start    = rx_array.data[1] & 0b00000100;
 			bool now_LT = (rx_array.data[6]>50)? true: false;
 			state.shot_cycle_update  = (pre_LT^now_LT) & now_LT;
@@ -374,13 +391,13 @@ int main(int argc, char**argv){
 			msg.id = 0x0f;
 			msg.data.resize(can_data_size);
 
-			for(auto i = 1; i < 7; i++){
+			for(auto i = 1; i <= 3; i++){
 				msg.id += 0x10;
 				can_tx.publish(msg);
 			}
 			shot_status = 0;
-			while(sense.get_cycle_state() == sense.STOP) ++sense;
-			while(shot_spd.get_cycle_state() == shot_spd.STOP) ++shot_spd;
+			while(!(sense.get_cycle_state() == sense.STOP)) ++sense;
+			while(!(shot_spd.get_cycle_state() == shot_spd.STOP)) ++shot_spd;
 		}
 
 		if(is_rx_can){
