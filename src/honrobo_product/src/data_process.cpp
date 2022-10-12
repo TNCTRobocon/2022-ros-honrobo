@@ -373,14 +373,19 @@ int main(int argc, char**argv){
 
 			can_tx.publish(msg);
 		}
-		//TODO
+		if(state.rise_initialize){
+			my_msgs::can_msg msg;
+			msg.data.resize(can_data_size);
+			msg.id = 0x24;
+			can_tx.publish(msg);
+		}
 
 		if(is_restoration){
 			my_msgs::can_msg msg;
 			msg.id = 0x0E;
 			msg.data.resize(can_data_size);
 
-			for(auto i = 1; i < 7; i++){
+			for(auto i = 1; i <= 3; i++){
 				msg.id += 0x10;
 				can_tx.publish(msg);
 			}

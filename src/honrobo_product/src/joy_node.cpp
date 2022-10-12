@@ -37,7 +37,8 @@ int main(int argc, char**argv){
                 is_rx = false;
 
             msg.data[1] = 
-                0;//TODO
+                (joy.axes[7] == 1)?0b10000000:0;//TODO
+                ROS_INFO("%d", msg.data[1]);
         }
         
         msg.data[2] = joy.axes[3]*127 - 128;
