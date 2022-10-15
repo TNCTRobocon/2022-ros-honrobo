@@ -413,7 +413,7 @@ int main(int argc, char**argv){
 			is_emergency = false;
 		}
 
-		if(is_rx_can){
+		if(is_rx_can && !one_sec_flag){
 			ROS_INFO("%d", can_msg.id);
 			if(can_msg.id == 0x0F) {
 				is_emergency = true;
@@ -440,10 +440,11 @@ int main(int argc, char**argv){
 			}
 
 			end = ros::Time::now();
-
 			auto time = end-start;
 
-			if(time.nsec> 1'000'000'000ULL) one_sec_flag = false;
+			pre_one_sec = one_sec_flag;
+
+			if(time.nsec > 100'000'000ULL) one_sec_flag = false;
 		}
 		
 #if TEST
