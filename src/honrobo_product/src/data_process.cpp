@@ -230,8 +230,6 @@ int main(int argc, char**argv){
 					msg.data[1] = 0;
 					msg.data[2] = 0;
 					break;
-			}
-			ROS_INFO("%d",msg.data[0]);
 		}
 
 		if(state.sense_cycle_update){
@@ -449,7 +447,6 @@ int main(int argc, char**argv){
 		}
 
 		if(is_rx_can && !one_sec_flag){
-			ROS_INFO("%d", can_msg.id);
 			if(can_msg.id == 0x0F) {
 				is_emergency = true;
 				one_sec_flag = true;
