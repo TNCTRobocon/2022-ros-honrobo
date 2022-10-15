@@ -135,6 +135,7 @@ int main(int argc, char**argv){
 	uint8_t shot_status = 0;
 	bool pre_LT = false;
 	bool reload_lock = false;
+	bool one_sec_flag = false;
 
 	while(ros::ok()){
 		input_status state;
@@ -414,7 +415,10 @@ int main(int argc, char**argv){
 
 		if(is_rx_can){
 			ROS_INFO("%d", can_msg.id);
-			if(can_msg.id == 0x0F) is_emergency = true;
+			if(can_msg.id == 0x0F) {
+				is_emergency = true;
+				one_sec_flag = true;
+			}
 			if(can_msg.id == 0x0E) is_restoration = true;
 
 			if(can_msg.id == 0x07) reload_lock = false;
@@ -423,6 +427,23 @@ int main(int argc, char**argv){
 
 			// TODO
 			// write odom?
+		}
+
+		if(one_sec_flag){
+			static bool pre_one_sec = false;
+
+			static ros::Time start;
+			static ros::Time end;
+
+			if((one_sec_flag^pre_one_sec)&one_sec_flag){
+				start = ros::Time::now();
+			}
+
+			end = ros::Time::now();
+
+			auto time = end-start;
+
+			if(time.nsec> 1'000'000'000ULL) one_sec_flag = false;
 		}
 		
 #if TEST
