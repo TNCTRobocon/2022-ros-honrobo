@@ -457,7 +457,7 @@ int main(int argc, char**argv){
 			if(can_msg.id == 0x07) reload_lock = false;
 
 			if(can_msg.id == 0x04) {
-				ROS_INFO("%09f", (float)can_msg.data[0]*2*M_PI/255);
+				ROS_INFO("%09f", (float)can_msg.data[0]*2.0*M_PI/255.0);
 			}
 
 			is_rx_can = false;
