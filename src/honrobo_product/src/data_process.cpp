@@ -90,6 +90,7 @@ my_msgs::can_msg can_msg;
 void can_rx_callback(const my_msgs::can_msg& CAN_RX){
 	is_rx_can = true;
 	if(can_msg.data.size() != can_data_size) can_msg.data.resize(can_data_size);
+	can_msg.id = CAN_RX.id;
 	std::copy(CAN_RX.data.begin(), CAN_RX.data.end(), can_msg.data.begin());
 }
 
@@ -292,9 +293,9 @@ int main(int argc, char**argv){
 				break;
 			}
 
-			pub_x = clamp(pub_x, pre_v[X], 0.05f, -0.05f);
-			pub_y = clamp(pub_y, pre_v[Y], 0.05f, -0.05f);
-			pub_spin = clamp(pub_spin, pre_v[SPIN], 0.05f, -0.05f);
+			pub_x = clamp(pub_x, pre_v[X], 0.1f, -0.1f);
+			pub_y = clamp(pub_y, pre_v[Y], 0.1f, -0.1f);
+			pub_spin = clamp(pub_spin, pre_v[SPIN], 0.1f, -0.1f);
 
 			uint8_t msg1_uint8[can_data_size], msg2_uint8[can_data_size];
 
@@ -316,6 +317,9 @@ int main(int argc, char**argv){
 				msg.data[i] = msg2_uint8[i];
 			}
 			can_tx.publish(msg);
+			pre_v[X] = pub_x;
+			pre_v[Y] = pub_y;
+			pre_v[SPIN] = pub_spin;
 		}
 
 		if(is_update_value && shot_status == state.SPIN){
@@ -389,6 +393,8 @@ int main(int argc, char**argv){
 				msg.id += 0x10;
 				can_tx.publish(msg);
 			}
+
+			is_restoration = false;
 		}
 
 		if(is_emergency){
@@ -403,13 +409,17 @@ int main(int argc, char**argv){
 			shot_status = 0;
 			while(!(sense.get_cycle_state() == sense.STOP)) ++sense;
 			while(!(shot_spd.get_cycle_state() == shot_spd.STOP)) ++shot_spd;
+			is_emergency = false;
 		}
 
 		if(is_rx_can){
+			ROS_INFO("%d", can_msg.id);
 			if(can_msg.id == 0x0F) is_emergency = true;
 			if(can_msg.id == 0x0E) is_restoration = true;
 
 			if(can_msg.id == 0x07) reload_lock = false;
+
+			is_rx_can = false;
 
 			// TODO
 			// write odom?
