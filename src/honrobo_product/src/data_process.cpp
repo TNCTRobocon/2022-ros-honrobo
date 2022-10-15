@@ -191,6 +191,46 @@ int main(int argc, char**argv){
 			
 			can_tx.publish(msg);
 
+			enum {
+				R,
+				G,
+				B,
+			};
+			
+			switch(shot_status){
+				case input_status::MOVE:
+					// decide val
+					msg.id = 0x30;
+					msg.data[R] = 0;
+					msg.data[G] = 0;
+					msg.data[B] = 1;
+					break;
+				
+				case input_status::SPIN:
+					// decide val
+					msg.id = 0x30;
+					msg.data[R] = 0;
+					msg.data[G] = 1;
+					msg.data[B] = 0;
+					break;
+				
+				case input_status::SHOT:
+					// decide val
+					msg.id = 0x30;
+					msg.data[R] = 1;
+					msg.data[G] = 0;
+					msg.data[B] = 0;
+					break; 
+				
+				default:
+					//error status
+					// decide val
+					msg.id = 0x30;
+					msg.data[0] = 0;
+					msg.data[1] = 0;
+					msg.data[2] = 0;
+					break;
+			}
 			ROS_INFO("%d",msg.data[0]);
 		}
 
@@ -228,14 +268,9 @@ int main(int argc, char**argv){
 			my_msgs::can_msg msg_0x5n;
 			my_msgs::can_msg msg_0x6n;
 
-			msg_0x5n.id = 0x51;
-			msg_0x6n.id = 0x60;
-			msg_0x5n.data.resize(can_data_size);
-			msg_0x6n.data.resize(can_data_size);
-			can_tx.publish(msg_0x5n);
-			can_tx.publish(msg_0x6n);
-			
-			reload_lock = true;
+			my_msgs::can_msg msg;
+			msg.id = 0x25;
+			can_tx.publish(msg);
 		}
 
 		if(state.shot_cycle_update){
@@ -422,6 +457,10 @@ int main(int argc, char**argv){
 			if(can_msg.id == 0x0E) is_restoration = true;
 
 			if(can_msg.id == 0x07) reload_lock = false;
+
+			if(can_msg.id == 0x04) {
+				ROS_INFO("%09f", (float)can_msg.data[0]*2*M_PI/255);
+			}
 
 			is_rx_can = false;
 
