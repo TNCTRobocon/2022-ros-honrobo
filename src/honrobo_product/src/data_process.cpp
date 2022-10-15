@@ -230,6 +230,7 @@ int main(int argc, char**argv){
 					msg.data[1] = 0;
 					msg.data[2] = 0;
 					break;
+			}
 		}
 
 		if(state.sense_cycle_update){
