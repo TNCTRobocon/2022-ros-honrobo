@@ -1,0 +1,8 @@
+<launch>
+<!-- アドレスが変わることがあるかもしれないので要確認 -->
+    <machine name="raspi" address="192.168.11.2" env-loader="/home/raspi/catkin_ws/devel/env.sh" user="raspi" password="raspi-12543"/> 
+
+    <node machine="raspi" name="joy" pkg="joy" type="joy_node"/>
+    <node name="data_process" pkg="honrobo_product" type="data_process"/>
+    <node name="joy_encode"  pkg="honrobo_product" type="joy_encode"/>
+</launch>
