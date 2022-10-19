@@ -12,6 +12,7 @@
 #include <ros/ros.h>
 #include <std_msgs/UInt8MultiArray.h>
 #include <std_msgs/Float32.h>
+#include <std_msgs/UInt8.h>
 #include <my_msgs/can_msg.h>
 
 #define TEST // need to remove
@@ -27,6 +28,14 @@
 constexpr size_t can_data_size = 8;
 bool is_emergency = false;
 bool is_restoration = false;
+
+enum YUKARI_STATUS{
+emergency,    move,         slow,
+hispeed,      no_plane,     spin,
+logic_start,  restoration,  start,
+middle,       shot,         stop,
+
+};
 
 // structures
 struct input_status{
@@ -128,6 +137,8 @@ int main(int argc, char**argv){
 	ros::Publisher controller_output = nh.advertise<std_msgs::Float32>("lidar_data", 10);
 	ros::Subscriber controller_wireless_input = nh.subscribe("control_wireless_data", 10, controller_wireless_callback);
 	ros::Subscriber controller_wifi_input = 	nh.subscribe("control_data", 10, controller_wifi_callback);
+
+	ros::Publisher yukari = nh.advertise<std_msgs::UInt8>("yukari_voice", 10);
 	// need more?
 
 	cycle sense;
@@ -137,6 +148,8 @@ int main(int argc, char**argv){
 	bool reload_lock = false;
 	bool one_sec_flag = false;
 
+	std_msgs::UInt8 yukari_msg;
+	uint8_t shot_counter = 0;
 	while(ros::ok()){
 		input_status state;
 		bool is_update_value = false;
@@ -200,6 +213,8 @@ int main(int argc, char**argv){
 			switch(shot_status){
 				case input_status::MOVE:
 					// decide val
+					yukari_msg.data = YUKARI_STATUS::move;
+					yukari.publish(yukari_msg);
 					msg.id = 0x30;
 					msg.data[R] = 0;
 					msg.data[G] = 0;
@@ -208,6 +223,8 @@ int main(int argc, char**argv){
 				
 				case input_status::SPIN:
 					// decide val
+					yukari_msg.data = YUKARI_STATUS::spin;
+					yukari.publish(yukari_msg);
 					msg.id = 0x30;
 					msg.data[R] = 0;
 					msg.data[G] = 1;
@@ -216,6 +233,8 @@ int main(int argc, char**argv){
 				
 				case input_status::SHOT:
 					// decide val
+					yukari_msg.data = YUKARI_STATUS::shot;
+					yukari.publish(yukari_msg);
 					msg.id = 0x30;
 					msg.data[R] = 1;
 					msg.data[G] = 0;
@@ -235,6 +254,28 @@ int main(int argc, char**argv){
 
 		if(state.sense_cycle_update){
 			++sense;
+			
+			switch(sense.get_cycle_state()){
+				case sense.HI_SENSE:
+					yukari_msg.data = YUKARI_STATUS::hispeed;
+					yukari.publish(yukari_msg);
+					break;
+				case sense.MIDDLE_SENSE:
+					yukari_msg.data = YUKARI_STATUS::middle;
+					yukari.publish(yukari_msg);
+					break;
+				case sense.LOW_SENSE:
+					yukari_msg.data = YUKARI_STATUS::slow;
+					yukari.publish(yukari_msg);
+					break;
+				case sense.STOP:
+					yukari_msg.data = YUKARI_STATUS::stop;
+					yukari.publish(yukari_msg);
+					break;
+				default:
+					break;
+				
+			}
 		}
 
 		if(state.tire_return){
@@ -255,12 +296,20 @@ int main(int argc, char**argv){
 			my_msgs::can_msg msg_0x2n;
 			my_msgs::can_msg msg_0x5n;
 
-			msg_0x2n.id = 0x20;
-			msg_0x5n.id = 0x50;
-			msg_0x2n.data.resize(can_data_size);
-			msg_0x5n.data.resize(can_data_size);
-			can_tx.publish(msg_0x2n);
-			can_tx.publish(msg_0x5n);
+			if(shot_counter < 11){
+				ROS_INFO("---");
+				msg_0x2n.id = 0x20;
+				msg_0x5n.id = 0x50;
+				msg_0x2n.data.resize(can_data_size);
+				msg_0x5n.data.resize(can_data_size);
+				can_tx.publish(msg_0x2n);
+				can_tx.publish(msg_0x5n);
+			}else{
+				yukari_msg.data = YUKARI_STATUS::no_plane;
+				yukari.publish(yukari_msg);
+			}
+
+			++shot_counter;
 		}
 
 		if(state.change_cartridge){
@@ -269,7 +318,10 @@ int main(int argc, char**argv){
 
 			my_msgs::can_msg msg;
 			msg.id = 0x25;
+			msg.data.resize(8);
 			can_tx.publish(msg);
+			shot_counter = 0;
+			shot_counter++;
 		}
 
 		if(state.shot_cycle_update){
@@ -420,6 +472,8 @@ int main(int argc, char**argv){
 		}
 
 		if(is_restoration){
+			yukari_msg.data = YUKARI_STATUS::restoration;
+			yukari.publish(yukari_msg);
 			my_msgs::can_msg msg;
 			msg.id = 0x0E;
 			msg.data.resize(can_data_size);
@@ -433,6 +487,8 @@ int main(int argc, char**argv){
 		}
 
 		if(is_emergency){
+			yukari_msg.data = YUKARI_STATUS::emergency;
+			yukari.publish(yukari_msg);
 			my_msgs::can_msg msg;
 			msg.id = 0x0f;
 			msg.data.resize(can_data_size);
@@ -462,7 +518,18 @@ int main(int argc, char**argv){
 
 			is_rx_can = false;
 
-			// TODO
+			static uint8_t logic_ok = 0b11;
+			if(can_msg.data[0] == 0 && can_msg.data[7] == 0){
+				if(can_msg.id == 0x09) logic_ok &= 0b01;
+				if(can_msg.id == 0x0A) logic_ok &= 0b10;
+			}
+
+			static bool is_pass = false;
+			if(!logic_ok && !is_pass){
+				is_pass = true;
+				yukari_msg.data = YUKARI_STATUS::logic_start;
+				yukari.publish(yukari_msg);
+			}
 			// write odom?
 		}
 
