@@ -150,6 +150,14 @@ int main(int argc, char**argv){
 
 	std_msgs::UInt8 yukari_msg;
 	uint8_t shot_counter = 0;
+
+	my_msgs::can_msg start_msg;
+	start_msg.data.resize(8);
+	start_msg.id = 0x30;
+	start_msg.data[0] = 0b100'100;
+
+	can_tx.publish(start_msg);
+
 	while(ros::ok()){
 		input_status state;
 		bool is_update_value = false;
@@ -216,9 +224,7 @@ int main(int argc, char**argv){
 					yukari_msg.data = YUKARI_STATUS::move;
 					yukari.publish(yukari_msg);
 					msg.id = 0x30;
-					msg.data[R] = 0;
-					msg.data[G] = 0;
-					msg.data[B] = 1;
+					msg.data[0] = 0b100'100;
 					break;
 				
 				case input_status::SPIN:
@@ -226,9 +232,7 @@ int main(int argc, char**argv){
 					yukari_msg.data = YUKARI_STATUS::spin;
 					yukari.publish(yukari_msg);
 					msg.id = 0x30;
-					msg.data[R] = 0;
-					msg.data[G] = 1;
-					msg.data[B] = 0;
+					msg.data[0] = 0b010'010;
 					break;
 				
 				case input_status::SHOT:
@@ -236,9 +240,7 @@ int main(int argc, char**argv){
 					yukari_msg.data = YUKARI_STATUS::shot;
 					yukari.publish(yukari_msg);
 					msg.id = 0x30;
-					msg.data[R] = 1;
-					msg.data[G] = 0;
-					msg.data[B] = 0;
+					msg.data[0] = 0b001'001;
 					break; 
 				
 				default:
@@ -250,6 +252,7 @@ int main(int argc, char**argv){
 					msg.data[2] = 0;
 					break;
 			}
+			can_tx.publish(msg);
 		}
 
 		if(state.sense_cycle_update){
@@ -296,8 +299,7 @@ int main(int argc, char**argv){
 			my_msgs::can_msg msg_0x2n;
 			my_msgs::can_msg msg_0x5n;
 
-			if(shot_counter < 11){
-				ROS_INFO("---");
+			if(shot_counter < 8){
 				msg_0x2n.id = 0x20;
 				msg_0x5n.id = 0x50;
 				msg_0x2n.data.resize(can_data_size);
@@ -313,15 +315,12 @@ int main(int argc, char**argv){
 		}
 
 		if(state.change_cartridge){
-			my_msgs::can_msg msg_0x5n;
-			my_msgs::can_msg msg_0x6n;
 
 			my_msgs::can_msg msg;
 			msg.id = 0x25;
 			msg.data.resize(8);
 			can_tx.publish(msg);
 			shot_counter = 0;
-			shot_counter++;
 		}
 
 		if(state.shot_cycle_update){
