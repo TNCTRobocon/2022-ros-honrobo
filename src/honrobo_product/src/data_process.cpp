@@ -340,11 +340,11 @@ int main(int argc, char**argv){
 			enum{
 				X, Y, SPIN
 			};
-			constexpr float hi_sense_coeff     = 2.0f/128.0f,
-							middle_sense_coeff = 1.0f/128.0f,
+			constexpr float hi_sense_coeff     = 3.0f/128.0f,
+							middle_sense_coeff = 1.5f/128.0f,
 							low_sense_coeff    = 0.5/128.0f;
-			constexpr float spin_hi_sense_coeff     = 2.0f*M_PI/128.0f,
-							spin_middle_sense_coeff = 0.5*M_PI/128.0f,
+			constexpr float spin_hi_sense_coeff     = 3.0f*M_PI/128.0f,
+							spin_middle_sense_coeff = 1.5*M_PI/128.0f,
 							spin_low_sense_coeff    = 0.25*M_PI/128.0f;
 
 			float pub_x = 0, pub_y = 0, pub_spin = 0;
@@ -379,9 +379,9 @@ int main(int argc, char**argv){
 				break;
 			}
 
-			pub_x = clamp(pub_x, pre_v[X], 0.1f, -0.1f);
-			pub_y = clamp(pub_y, pre_v[Y], 0.1f, -0.1f);
-			pub_spin = clamp(pub_spin, pre_v[SPIN], 0.1f, -0.1f);
+			pub_x = clamp(pub_x, pre_v[X], 0.05f, -0.05f);
+			pub_y = clamp(pub_y, pre_v[Y], 0.05f, -0.05f);
+			pub_spin = clamp(pub_spin, pre_v[SPIN], 0.05f, -0.05f);
 
 			uint8_t msg1_uint8[can_data_size], msg2_uint8[can_data_size];
 
